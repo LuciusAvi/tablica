@@ -54,14 +54,13 @@
             const search = searchInput ? searchInput.value.trim() : '';
             const [sortField, sortOrder] = sortSelect ? sortSelect.value.split('-') : ['title', 'asc'];
 
-            // Делаем INNER JOIN (!inner), чтобы корректно фильтровать по автору
             let query = supabase
                 .from('book')
-                .select('title, price, amount, author!inner(name_author)');
+                .select('title, price, amount, author(name_author)');
 
             if (search) {
-                // Поиск и по title, и по name_author связанной таблицы
-                query = query.or(`title.ilike.%${search}%,author.name_author.ilike.%${search}%`);
+                // Выполняем поиск по названию книги OR по имени автора в связанной таблице
+                query = query.or(`title.ilike.%${search}%,author.name_author.ilike.%${search}%`, { foreignTable: 'author' });
             }
 
             query = query.order(sortField, { ascending: sortOrder === 'asc' });
@@ -69,11 +68,32 @@
             const { data, error } = await query;
 
             if (error) {
+                // Если сработало ограничение PostgREST на foreignTable в or, выполняем клиенский поиск как фоллбэк:
+                let fallbackQuery = supabase
+                    .from('book')
+                    .select('title, price, amount, author(name_author)')
+                    .order(sortField, { ascending: sortOrder === 'asc' });
+                
+                const fallbackResult = await fallbackQuery;
+                if (!fallbackResult.error && fallbackResult.data) {
+                    const filteredData = fallbackResult.data.filter(book => {
+                        const titleMatch = book.title && book.title.toLowerCase().includes(search.toLowerCase());
+                        const authorMatch = book.author && book.author.name_author && book.author.name_author.toLowerCase().includes(search.toLowerCase());
+                        return titleMatch || authorMatch;
+                    });
+                    renderTable(filteredData, tbody);
+                    return;
+                }
+
                 console.error('Ошибка Supabase:', error);
                 tbody.innerHTML = `<tr><td colspan="4" style="color:red">Ошибка загрузки: ${error.message}</td></tr>`;
                 return;
             }
 
+            renderTable(data, tbody);
+        }
+
+        function renderTable(data, tbody) {
             tbody.innerHTML = '';
 
             if (!data || data.length === 0) {
@@ -93,7 +113,7 @@
             });
         }
 
-        // Привязываем обработчики событий
+        // Привязываем события
         document.getElementById('searchInput').addEventListener('input', loadBooks);
         document.getElementById('sortSelect').addEventListener('change', loadBooks);
 
