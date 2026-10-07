@@ -2,6 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Каталог книг</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 30px; background: #f4f4f9; }
@@ -17,7 +18,7 @@
     <h2>Каталог книг</h2>
 
     <div class="controls">
-        <input type="text" id="searchInput" placeholder="Поиск по названию...">
+        <input type="text" id="searchInput" placeholder="Поиск по названию или автору...">
         <select id="sortSelect">
             <option value="title-asc">Название (А-Я)</option>
             <option value="title-desc">Название (Я-А)</option>
@@ -50,15 +51,17 @@
             const sortSelect = document.getElementById('sortSelect');
             const tbody = document.getElementById('booksTable');
 
-            const search = searchInput ? searchInput.value : '';
+            const search = searchInput ? searchInput.value.trim() : '';
             const [sortField, sortOrder] = sortSelect ? sortSelect.value.split('-') : ['title', 'asc'];
 
+            // Делаем INNER JOIN (!inner), чтобы корректно фильтровать по автору
             let query = supabase
                 .from('book')
-                .select('title, price, amount, author(name_author)');
+                .select('title, price, amount, author!inner(name_author)');
 
             if (search) {
-                query = query.ilike('title', `%${search}%`);
+                // Поиск и по title, и по name_author связанной таблицы
+                query = query.or(`title.ilike.%${search}%,author.name_author.ilike.%${search}%`);
             }
 
             query = query.order(sortField, { ascending: sortOrder === 'asc' });
@@ -74,7 +77,7 @@
             tbody.innerHTML = '';
 
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4">Записи не найдены</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4">Ничего не найдено</td></tr>';
                 return;
             }
 
@@ -90,11 +93,11 @@
             });
         }
 
-        // Привязываем события слушателей
+        // Привязываем обработчики событий
         document.getElementById('searchInput').addEventListener('input', loadBooks);
         document.getElementById('sortSelect').addEventListener('change', loadBooks);
 
-        // Загружаем данные при открытии страницы
+        // Первоначальная загрузка
         loadBooks();
     </script>
 </body>
