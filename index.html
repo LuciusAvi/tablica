@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Каталог книг</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background: #f4f4f9; }
+        .controls { margin-bottom: 20px; display: flex; gap: 10px; }
+        input, select { padding: 8px; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; background: #fff; }
+        th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
+        th { background: #007bff; color: white; }
+    </style>
+</head>
+<body>
+
+    <h2>Каталог книг</h2>
+
+    <div class="controls">
+        <input type="text" id="searchInput" placeholder="Поиск по названию..." oninput="loadBooks()">
+        <select id="sortSelect" onchange="loadBooks()">
+            <option value="title-asc">Название (А-Я)</option>
+            <option value="title-desc">Название (Я-А)</option>
+            <option value="price-asc">Цена (по возрастанию)</option>
+            <option value="price-desc">Цена (по убыванию)</option>
+        </select>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Название</th>
+                <th>Автор</th>
+                <th>Цена</th>
+                <th>Количество</th>
+            </tr>
+        </thead>
+        <tbody id="booksTable"></tbody>
+    </table>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+        const SUPABASE_URL = https://jxouqjeonvsmhuabevax.supabase.co;
+        const SUPABASE_KEY = sb_publishable_MCUHToGWHqly12-y8Z7kxA_ha79TfPm;
+        const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        async function loadBooks() {
+            const search = document.getElementById('searchInput').value;
+            const [sortField, sortOrder] = document.getElementById('sortSelect').value.split('-');
+
+            let query = supabase
+                .from('book')
+                .select('title, price, amount, author(name_author)');
+
+            if (search) {
+                query = query.ilike('title', `%${search}%`);
+            }
+
+            query = query.order(sortField, { ascending: sortOrder === 'asc' });
+
+            const { data, error } = await query;
+
+            const tbody = document.getElementById('booksTable');
+            tbody.innerHTML = '';
+
+            if (error) {
+                console.error(error);
+                return;
+            }
+
+            data.forEach(book => {
+                const row = `<tr>
+                    <td>${book.title}</td>
+                    <td>${book.author ? book.author.name_author : 'Не указан'}</td>
+                    <td>${book.price} руб.</td>
+                    <td>${book.amount}</td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+        }
+
+        window.loadBooks = loadBooks;
+        loadBooks();
+    </script>
+</body>
+</html>
