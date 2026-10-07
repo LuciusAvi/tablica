@@ -46,20 +46,18 @@
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4b3VxamVvbnZzbWh1YWJldmF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzNDEwNTMsImV4cCI6MjEwNjkxNzA1M30.SHVO2kQZDeSOziWDNwMkLOU4PmV2OPR0VjEKXh0GNR0';
         const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        async function loadBooks() {
-            const searchInput = document.getElementById('searchInput');
+        let cachedData = []; // Кэш всех книг для мгновенной откликаемости
+        let debounceTimer;   // Таймер для предотвращения лишних запросов
+
+        async function fetchBooks() {
             const sortSelect = document.getElementById('sortSelect');
             const tbody = document.getElementById('booksTable');
-
-            const search = searchInput ? searchInput.value.trim() : '';
             const [sortField, sortOrder] = sortSelect ? sortSelect.value.split('-') : ['title', 'asc'];
 
-            // Завантажуємо всі дані з урахуванням зв'язку з author
             let query = supabase
                 .from('book')
-                .select('title, price, amount, author!inner(name_author)');
-
-            query = query.order(sortField, { ascending: sortOrder === 'asc' });
+                .select('title, price, amount, author!inner(name_author)')
+                .order(sortField, { ascending: sortOrder === 'asc' });
 
             const { data, error } = await query;
 
@@ -69,16 +67,25 @@
                 return;
             }
 
-            // Фільтрація масиву на стороні клієнта (працює миттєво та без синтаксичних помилок API)
-            let filteredData = data;
-            if (search) {
-                const searchLower = search.toLowerCase();
-                filteredData = data.filter(book => {
-                    const titleMatch = book.title && book.title.toLowerCase().includes(searchLower);
-                    const authorMatch = book.author && book.author.name_author && book.author.name_author.toLowerCase().includes(searchLower);
-                    return titleMatch || authorMatch;
-                });
+            cachedData = data || [];
+            applyFilterAndRender();
+        }
+
+        function applyFilterAndRender() {
+            const searchInput = document.getElementById('searchInput');
+            const tbody = document.getElementById('booksTable');
+            const search = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+            if (!search) {
+                renderTable(cachedData, tbody);
+                return;
             }
+
+            const filteredData = cachedData.filter(book => {
+                const titleMatch = book.title && book.title.toLowerCase().includes(search);
+                const authorMatch = book.author && book.author.name_author && book.author.name_author.toLowerCase().includes(search);
+                return titleMatch || authorMatch;
+            });
 
             renderTable(filteredData, tbody);
         }
@@ -103,12 +110,21 @@
             });
         }
 
-        // Прив'язуємо події
-        document.getElementById('searchInput').addEventListener('input', loadBooks);
-        document.getElementById('sortSelect').addEventListener('change', loadBooks);
+        // Обработчик поиска с мгновенным сбросом при полной очистке
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            clearTimeout(debounceTimer);
+            if (e.target.value.trim() === '') {
+                applyFilterAndRender(); // Мгновенно отображаем весь список без задержки
+            } else {
+                debounceTimer = setTimeout(applyFilterAndRender, 150); // Легкий дебаунс для оптимизации
+            }
+        });
 
-        // Початкове завантаження
-        loadBooks();
+        // При изменении сортировки запрашиваем обновленный список у сервера
+        document.getElementById('sortSelect').addEventListener('change', fetchBooks);
+
+        // Первоначальная загрузка
+        fetchBooks();
     </script>
 </body>
 </html>
