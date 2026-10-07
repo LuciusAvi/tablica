@@ -17,8 +17,8 @@
     <h2>Каталог книг</h2>
 
     <div class="controls">
-        <input type="text" id="searchInput" placeholder="Поиск по названию..." oninput="loadBooks()">
-        <select id="sortSelect" onchange="loadBooks()">
+        <input type="text" id="searchInput" placeholder="Поиск по названию...">
+        <select id="sortSelect">
             <option value="title-asc">Название (А-Я)</option>
             <option value="title-desc">Название (Я-А)</option>
             <option value="price-asc">Цена (по возрастанию)</option>
@@ -46,8 +46,12 @@
         const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
         async function loadBooks() {
-            const search = document.getElementById('searchInput').value;
-            const [sortField, sortOrder] = document.getElementById('sortSelect').value.split('-');
+            const searchInput = document.getElementById('searchInput');
+            const sortSelect = document.getElementById('sortSelect');
+            const tbody = document.getElementById('booksTable');
+
+            const search = searchInput ? searchInput.value : '';
+            const [sortField, sortOrder] = sortSelect ? sortSelect.value.split('-') : ['title', 'asc'];
 
             let query = supabase
                 .from('book')
@@ -61,26 +65,36 @@
 
             const { data, error } = await query;
 
-            const tbody = document.getElementById('booksTable');
+            if (error) {
+                console.error('Ошибка Supabase:', error);
+                tbody.innerHTML = `<tr><td colspan="4" style="color:red">Ошибка загрузки: ${error.message}</td></tr>`;
+                return;
+            }
+
             tbody.innerHTML = '';
 
-            if (error) {
-                console.error(error);
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4">Записи не найдены</td></tr>';
                 return;
             }
 
             data.forEach(book => {
+                const authorName = book.author ? book.author.name_author : 'Не указан';
                 const row = `<tr>
-                    <td>${book.title}</td>
-                    <td>${book.author ? book.author.name_author : 'Не указан'}</td>
-                    <td>${book.price} руб.</td>
-                    <td>${book.amount}</td>
+                    <td>${book.title || ''}</td>
+                    <td>${authorName}</td>
+                    <td>${book.price ? book.price + ' руб.' : '-'}</td>
+                    <td>${book.amount ?? 0}</td>
                 </tr>`;
                 tbody.innerHTML += row;
             });
         }
 
-        window.loadBooks = loadBooks;
+        // Привязываем события слушателей
+        document.getElementById('searchInput').addEventListener('input', loadBooks);
+        document.getElementById('sortSelect').addEventListener('change', loadBooks);
+
+        // Загружаем данные при открытии страницы
         loadBooks();
     </script>
 </body>
